@@ -46,6 +46,8 @@ HTML_FORM_SPEC = """<!DOCTYPE html>
     <form action="{action}" method="post">
       {saml_response_input}
       {relay_state_input}
+      {sigalg_input}
+      {signature_input}
       <noscript>
         <input type="submit" value="Continue"/>
       </noscript>
@@ -58,7 +60,16 @@ def _html_escape(payload):
     return html.escape(payload, quote=True)
 
 
-def http_form_post_message(message, location, relay_state="", typ="SAMLRequest", **kwargs):
+def http_form_post_message(
+    message,
+    location,
+    relay_state="",
+    typ="SAMLRequest",
+    sigalg=None,
+    sign=None,
+    backend=None,
+    **kwargs
+):
     """The HTTP POST binding defines a mechanism by which SAML protocol
     messages may be transmitted within the base64-encoded content of a
     HTML form control.
@@ -66,6 +77,9 @@ def http_form_post_message(message, location, relay_state="", typ="SAMLRequest",
     :param message: The message
     :param location: Where the form should be posted to
     :param relay_state: for preserving and conveying state information
+    :param sigalg: Which algorithm the signature function will use to sign
+        the message
+    :param sign: Whether the message should be signed
     :return: A tuple containing header information and a HTML message.
     """
     if not isinstance(message, str):
@@ -87,8 +101,47 @@ def http_form_post_message(message, location, relay_state="", typ="SAMLRequest",
             name="RelayState", val=_html_escape(relay_state), type="hidden"
         )
 
+    sigalg_input = ""
+    signature_input = ""
+    if sign:
+        _order = None
+        if typ in ["SAMLRequest", "SAMLResponse"]:
+            if typ == "SAMLRequest":
+                _order = REQ_ORDER
+            else:
+                _order = RESP_ORDER
+            args = {typ: message.decode("utf-8")}
+        else:
+            raise Exception(f"Unknown message type: {typ}")
+
+        if relay_state:
+            args["RelayState"] = relay_state
+
+        # sigalgs, should be one defined in xmldsig
+        if sigalg not in [long_name for short_name, long_name in SIG_ALLOWED_ALG]:
+            raise Exception(f"Signature algo not in allowed list: {sigalg}")
+        signer = backend.get_signer(sigalg) if sign and sigalg else None
+        if not signer:
+            raise Exception(f"Could not init signer fro algo {sigalg}")
+
+        args["SigAlg"] = sigalg
+        string = "&".join(f"{k}={args[k]}" for k in _order if k in args)
+        string_enc = string.encode("utf-8")
+        args["Signature"] = base64.b64encode(signer.sign(string_enc))
+
+        sigalg_input = HTML_INPUT_ELEMENT_SPEC.format(
+            name="SigAlg", val=_html_escape(args["SigAlg"]), type="hidden"
+        )
+        signature_input = HTML_INPUT_ELEMENT_SPEC.format(
+            name="Signature", val=_html_escape(args["Signature"].decode("ascii")), type="hidden"
+        )
+
     response = HTML_FORM_SPEC.format(
-        saml_response_input=saml_response_input, relay_state_input=relay_state_input, action=location
+        saml_response_input=saml_response_input,
+        relay_state_input=relay_state_input,
+        action=location,
+        sigalg_input=sigalg_input,
+        signature_input=signature_input
     )
 
     return {"headers": [("Content-type", "text/html")], "data": response, "status": 200}
@@ -299,6 +352,7 @@ def parse_soap_enveloped_saml(text, body_class, header_class=None):
 PACKING = {
     saml2.BINDING_HTTP_REDIRECT: http_redirect_message,
     saml2.BINDING_HTTP_POST: http_form_post_message,
+    saml2.BINDING_HTTP_POST_SIMPLESIGN: http_form_post_message,
 }
 
 

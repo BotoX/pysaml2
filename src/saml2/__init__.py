@@ -58,6 +58,7 @@ BINDING_PAOS = "urn:oasis:names:tc:SAML:2.0:bindings:PAOS"
 BINDING_HTTP_REDIRECT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Redirect"
 # HTML encoded messages
 BINDING_HTTP_POST = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST"
+BINDING_HTTP_POST_SIMPLESIGN = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-POST-SimpleSign"
 # sensitive messages are transported over a backchannel
 BINDING_HTTP_ARTIFACT = "urn:oasis:names:tc:SAML:2.0:bindings:HTTP-Artifact"
 # as uri response encoded message
