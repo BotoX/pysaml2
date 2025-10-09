@@ -9,6 +9,7 @@ import requests
 
 from saml2 import BINDING_HTTP_ARTIFACT
 from saml2 import BINDING_HTTP_POST
+from saml2 import BINDING_HTTP_POST_SIMPLESIGN
 from saml2 import BINDING_HTTP_REDIRECT
 from saml2 import BINDING_PAOS
 from saml2 import BINDING_SOAP
@@ -279,6 +280,19 @@ class Entity(HTTPBase):
         if binding == BINDING_HTTP_POST:
             logger.debug("HTTP POST")
             info = http_form_post_message(msg_str, destination, relay_state, typ)
+            info["url"] = destination
+            info["method"] = "POST"
+        elif binding == BINDING_HTTP_POST_SIMPLESIGN:
+            logger.debug("HTTP POST SimpleSign")
+            info = http_form_post_message(
+                message=msg_str,
+                location=destination,
+                relay_state=relay_state,
+                typ=typ,
+                sign=sign,
+                sigalg=sign_alg,
+                backend=self.sec.sec_backend,
+            )
             info["url"] = destination
             info["method"] = "POST"
         elif binding == BINDING_HTTP_REDIRECT:
